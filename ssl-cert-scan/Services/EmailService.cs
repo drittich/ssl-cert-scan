@@ -8,8 +8,19 @@ namespace ssl_cert_scan.Services;
 
 public interface IEmailService
 {
-    Task<bool> SendReportAsync(ScanResult scanResult, AppConfiguration config);
+    Task<EmailResult> SendReportAsync(ScanResult scanResult, AppConfiguration config);
     Task<bool> TestEmailConfigurationAsync(SmtpSettings smtpSettings);
+}
+
+public class EmailResult
+{
+    public bool Success { get; set; }
+    public bool EmailSent { get; set; }
+    public string Message { get; set; } = string.Empty;
+    
+    public static EmailResult Sent() => new() { Success = true, EmailSent = true, Message = "Email sent successfully" };
+    public static EmailResult Skipped(string reason) => new() { Success = true, EmailSent = false, Message = reason };
+    public static EmailResult Failed(string reason) => new() { Success = false, EmailSent = false, Message = reason };
 }
 
 public class EmailService : IEmailService
@@ -21,21 +32,21 @@ public class EmailService : IEmailService
         _logger = logger;
     }
 
-    public async Task<bool> SendReportAsync(ScanResult scanResult, AppConfiguration config)
+    public async Task<EmailResult> SendReportAsync(ScanResult scanResult, AppConfiguration config)
     {
         try
         {
             if (!config.EmailRecipients.Any() || string.IsNullOrWhiteSpace(config.Smtp.Host))
             {
                 _logger.LogWarning("Email configuration incomplete. Skipping email notification.");
-                return false;
+                return EmailResult.Failed("Email configuration incomplete");
             }
 
             // Check if we should send email based on settings
             if (config.Notifications.SendOnlyForExpiringCerts && !scanResult.HasIssues)
             {
                 _logger.LogInformation("No certificate issues found and SendOnlyForExpiringCerts is enabled. Skipping email notification.");
-                return true; // Return true as this is expected behavior
+                return EmailResult.Skipped("No certificate issues found and SendOnlyForExpiringCerts is enabled");
             }
 
             _logger.LogInformation("Preparing to send email report to {RecipientCount} recipients", config.EmailRecipients.Count);
@@ -46,12 +57,12 @@ public class EmailService : IEmailService
             await smtpClient.SendMailAsync(mailMessage);
             
             _logger.LogInformation("Email report sent successfully to {Recipients}", string.Join(", ", config.EmailRecipients));
-            return true;
+            return EmailResult.Sent();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send email report");
-            return false;
+            return EmailResult.Failed($"Failed to send email: {ex.Message}");
         }
     }
 

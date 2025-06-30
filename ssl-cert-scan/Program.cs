@@ -53,18 +53,26 @@ internal class Program
             // Send email notification if configured
             if (config.EmailRecipients.Any() && !string.IsNullOrWhiteSpace(config.Smtp.Host))
             {
-                logger.LogInformation("Sending email notification...");
-                var emailSent = await emailService.SendReportAsync(scanResult, config);
+                logger.LogInformation("Processing email notification...");
+                var emailResult = await emailService.SendReportAsync(scanResult, config);
                 
-                if (emailSent)
+                if (emailResult.Success)
                 {
-                    Console.WriteLine("✓ Email notification sent successfully");
-                    logger.LogInformation("Email notification sent successfully");
+                    if (emailResult.EmailSent)
+                    {
+                        Console.WriteLine("✓ Email notification sent successfully");
+                        logger.LogInformation("Email notification sent successfully");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"ℹ Email notification skipped: {emailResult.Message}");
+                        logger.LogInformation("Email notification skipped: {Message}", emailResult.Message);
+                    }
                 }
                 else
                 {
-                    Console.WriteLine("⚠ Failed to send email notification");
-                    logger.LogWarning("Failed to send email notification");
+                    Console.WriteLine($"⚠ Failed to send email notification: {emailResult.Message}");
+                    logger.LogWarning("Failed to send email notification: {Message}", emailResult.Message);
                 }
             }
             else
